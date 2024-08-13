@@ -4,8 +4,10 @@ from typing import Tuple
 import torch
 from torch import nn, einsum, Tensor
 import torch.nn.functional as F
-from torch.cuda.amp import autocast
 from torch.nn import Module, ModuleList
+from torch.amp import autocast
+from functools import partial
+autocast = partial(autocast, device_type='cuda')
 
 from einops import rearrange, repeat
 

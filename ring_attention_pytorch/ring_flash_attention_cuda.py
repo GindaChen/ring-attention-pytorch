@@ -5,7 +5,10 @@ from math import ceil
 import torch
 from torch import nn, einsum, Tensor
 from torch.autograd.function import Function
-from torch.cuda.amp import autocast
+from torch.amp import autocast
+from functools import partial
+autocast = partial(autocast, device_type='cuda')
+
 
 from ring_attention_pytorch.ring import (
     ring_pass,
