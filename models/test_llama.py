@@ -97,8 +97,7 @@ set_ring_seq_and_bucket_size(
 
 
 # Initialize the configuration automatically from the pretrained model
-model_name = "meta-llama/Meta-Llama-3-8B"
-# model_name = "TinyLlama/TinyLlama_v1.1"
+model_name = args.model_name
 debug_print(f"Loading configuration from the pretrained model {model_name}...")
 
 
@@ -159,3 +158,7 @@ duration = start.elapsed_time(end)
 
 if rank == 0:
     print(f"Running {model_name = } with {seq_len = }: {duration} ms")
+    # import wandb
+    # name = f"{model_name}-tp{args.tp_size}-sp{args.sp_size}-seq{args.seq_len}-strip-{args.enable_strip_attention}"
+    # wandb.init(project="ring-attention", name=name)
+    # wandb.log({"duration": duration})
