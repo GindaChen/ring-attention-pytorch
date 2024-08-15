@@ -9,7 +9,7 @@ from torch.nn import Module, ModuleList
 from torch.autograd import Function
 
 import torch.distributed as dist
-
+import ring_attention_pytorch.parallel_state as parallel_state
 # helper functions
 
 def exists(v):
@@ -27,15 +27,18 @@ cache = partial(lru_cache, maxsize = None)
 
 @cache()
 def get_rank():
-    return dist.get_rank() if dist.is_initialized() else 0
+    # return dist.get_rank() if dist.is_initialized() else 0
+    return parallel_state.get_cache_model_parallel_rank()
+
 
 @cache()
 def get_world_size():
-    return dist.get_world_size() if dist.is_initialized() else 1
+    # return dist.get_world_size() if dist.is_initialized() else 1
+    return parallel_state.get_cache_model_parallel_world_size()
 
 @cache()
 def is_distributed():
-    return dist.is_initialized() and dist.get_world_size() > 1
+    return dist.is_initialized() and parallel_state.get_cache_model_parallel_world_size() > 1
 
 # ring functions
 
@@ -48,6 +51,8 @@ def circular_index_right(pos, ring_size, num = 1):
 # distributed ring
 
 def circular_rank_left(rank = None, ring_size = None, num = 1):
+    rank = parallel_state.get_cache_model_parallel_prev_rank()
+    return rank
     rank = default(rank, get_rank())
     ring_size = default(ring_size, get_world_size())
     ring_set_num = rank // ring_size
@@ -55,6 +60,8 @@ def circular_rank_left(rank = None, ring_size = None, num = 1):
     return circular_index_left(rank, ring_size, num) + offset
 
 def circular_rank_right(rank = None, ring_size = None, num = 1):
+    rank = parallel_state.get_cache_model_parallel_next_rank()
+    return rank
     rank = default(rank, get_rank())
     ring_size = default(ring_size, get_world_size())
     ring_set_num = rank // ring_size
@@ -72,7 +79,8 @@ def send_and_receive_(x, receive_buffer, send_to_rank, receive_from_rank):
     for req in reqs:
         req.wait()
 
-    dist.barrier()
+    group = parallel_state.get_cache_model_parallel_group()
+    dist.barrier(group=group)
 
 def ring_pass(
     num_ring_passes: int,

@@ -6,6 +6,13 @@ from torch.autograd import Function
 
 import torch.distributed as dist
 
+from ring_attention_pytorch.parallel_state import (
+    get_cache_model_parallel_group, 
+    get_cache_model_parallel_rank, 
+    get_cache_model_parallel_world_size,
+
+)
+
 def exists(val):
     return val is not None
 
@@ -22,9 +29,10 @@ def pad_dim_to(t, length, dim = 0):
 
 def all_gather_same_dim(t):
     t = t.contiguous()
-    world_size = dist.get_world_size()
+    world_size = get_cache_model_parallel_world_size()
     gathered_tensors = [torch.empty_like(t, device = t.device, dtype = t.dtype) for i in range(world_size)]
-    dist.all_gather(gathered_tensors, t)
+    group = get_cache_model_parallel_group()
+    dist.all_gather(gathered_tensors, t, group=group)
     return gathered_tensors
 
 def gather_sizes(t, *, dim):
@@ -36,7 +44,7 @@ def has_only_one_value(t):
     return (t == t[0]).all()
 
 def all_gather_variable_dim(t, dim = 0, sizes = None):
-    device, rank, world_size = t.device, dist.get_rank(), dist.get_world_size()
+    device, rank, world_size = t.device, get_cache_model_parallel_rank(), get_cache_model_parallel_world_size()
 
     if not exists(sizes):
         sizes = gather_sizes(t, dim = dim)
@@ -82,7 +90,7 @@ class AllGatherFunction(Function):
 
     @staticmethod
     def backward(ctx, grads, _):
-        batch_sizes, rank = ctx.batch_sizes, dist.get_rank()
+        batch_sizes, rank = ctx.batch_sizes, get_cache_model_parallel_rank()
         grads_by_rank = grads.split(batch_sizes, dim = ctx.dim)
         return grads_by_rank[rank], None, None
 
@@ -95,7 +103,7 @@ class AllGather(Module):
         return AllGatherFunction.apply(x, self.dim, sizes)
 
 def split_by_rank(x):
-    rank = dist.get_rank()
+    rank = get_cache_model_parallel_rank()
     out = x[rank]
 
     if isinstance(x, tuple):

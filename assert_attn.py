@@ -171,6 +171,22 @@ def test(
     dim_head: int,
     compare_regular_attn: bool
 ):
+    print(f'Running test with the following parameters:')
+    print(f'world_size = {world_size}')
+    print(f'batch_size = {batch_size}')
+    print(f'num_sharded_batches = {num_sharded_batches}')
+    print(f'batch_size_var_len = {batch_size_var_len}')
+    print(f'use_cuda = {use_cuda}')
+    print(f'causal = {causal}')
+    print(f'striped_ring_attn = {striped_ring_attn}')
+    print(f'num_buckets = {num_buckets}')
+    print(f'seq_len = {seq_len}')
+    print(f'model_dim = {model_dim}')
+    print(f'heads = {heads}')
+    print(f'num_grouped_query_heads = {num_grouped_query_heads}')
+    print(f'dim_head = {dim_head}')
+    print(f'compare_regular_attn = {compare_regular_attn}')
+
     assert not use_cuda or world_size <= torch.cuda.device_count(), f'world size {world_size} must be less than the number of cuda devices {torch.cuda.device_count()}'
 
     mp.spawn(

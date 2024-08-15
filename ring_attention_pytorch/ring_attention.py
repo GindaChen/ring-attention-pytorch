@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch.nn import Module, ModuleList
 from torch.amp import autocast
 from functools import partial
+
 autocast = partial(autocast, device_type='cuda')
 
 from einops import rearrange, repeat
@@ -298,17 +299,19 @@ class RingAttention(Module):
         force_regular_attn: bool = False,
         rotary_embed: bool = False,
         rotary_embed_theta: int = 10000,
-        use_cuda_kernel: bool | None = None
+        use_cuda_kernel: bool | None = None,
+        tp_size:int = 1,
     ):
         super().__init__()
         # whether to use flash attention cuda kernel
+        self.tp_size = tp_size
 
         use_cuda_kernel = default(use_cuda_kernel, torch.cuda.is_available())
         assert not (use_cuda_kernel and not torch.cuda.is_available())
         self.use_cuda_kernel = use_cuda_kernel
 
         self.eps = eps
-        self.heads = heads
+        self.heads = heads // tp_size
         self.dim_head = dim_head
 
         assert divisible_by(heads, num_grouped_query_heads), f'number of query heads ({heads}) must be divisible by the groups ({num_grouped_query_heads})'
@@ -378,7 +381,6 @@ class RingAttention(Module):
         d - feature dimension
         n, i, j - sequence
         """
-
         ring_size = default(ring_size, get_world_size())
         ring_attn = self.ring_attn & is_distributed()
         auto_shard_seq = self.auto_shard_seq & is_distributed()
@@ -643,7 +645,9 @@ class RingTransformer(Module):
 
         x = self.token_emb(x)
 
-        for attn, ff in self.layers:
+        rank = get_rank()
+        for layer_id, (attn, ff) in enumerate(self.layers):
+            print(f"[{rank = }] Forward {layer_id = }")
             x = attn(
                 x,
                 mask = mask,
@@ -674,6 +678,7 @@ class RingTransformer(Module):
         if not auto_shard_seq:
             return logits
 
+        print(f"{logits.shape = }, {batch_sizes = }, {num_sharded_batches = }")
         logits = sharded_seq_to_sharded_batch(logits, batch_sizes, num_sharded_batches)
 
         if self.striped_ring_attn:
